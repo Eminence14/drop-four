@@ -1,0 +1,31 @@
+{
+  "name": "drop-four",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/make-icons.mjs",
+    "test:rules": "firebase emulators:exec --only database,auth \"vitest run --config vitest.rules.config.ts\"",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "@playwright/test": "^1.64.0",
+    "firebase-tools": "^14.27.0",
+    "sharp": "^0.35.5",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.4",
+    "vite-plugin-pwa": "^0.21.2",
+    "vitest": "^3.2.7",
+    "workbox-window": "^7.4.1"
+  },
+  "dependencies": {
+    "firebase": "^11.10.0",
+    "qrcode-generator": "^1.5.2"
+  }
+}
