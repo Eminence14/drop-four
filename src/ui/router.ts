@@ -23,6 +23,7 @@ function mount(f: ScreenFactory) {
 }
 
 export const nav = {
+  depth: () => stack.length,
   init(el: HTMLElement, home: ScreenFactory) {
     root = el;
     stack.length = 0;

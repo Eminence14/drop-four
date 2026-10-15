@@ -28,8 +28,17 @@ export function getTransport(): Promise<Transport> {
   return cached;
 }
 
+let refs = 0;
+/** Screens that use the backend hold a reference; the connection closes shortly after the last one lets go. */
+export function retainTransport() {
+  refs++;
+}
 export function releaseTransport() {
-  if (!cached) return;
-  void cached.then((t) => t.close()).catch(() => undefined);
-  cached = null;
+  refs = Math.max(0, refs - 1);
+  setTimeout(() => {
+    if (refs > 0 || !cached) return;
+    const c = cached;
+    cached = null;
+    void c.then((t) => t.close()).catch(() => undefined);
+  }, 1500);
 }

@@ -1,6 +1,7 @@
 import { h, icon } from './dom';
 import { BoardView, type BoardViewOptions } from './board';
-import { settings } from './store';
+import { initials, settings } from './store';
+import { ClockView } from './timer';
 
 export interface SeatView {
   name: string;
@@ -8,6 +9,7 @@ export interface SeatView {
   score?: number | string;
   sub?: string; // e.g. "AI · Hard", "Online", "You"
   online?: boolean | null; // presence dot (null = hide)
+  avatar?: string; // emoji, or '' for initials
 }
 
 export interface ResultButton {
@@ -21,6 +23,7 @@ export interface ResultButton {
 export class GameShell {
   readonly el: HTMLElement;
   readonly board: BoardView;
+  readonly clock = new ClockView();
   private seatEls: HTMLElement[] = [];
   private statusEl: HTMLElement;
   private actionsEl: HTMLElement;
@@ -82,7 +85,11 @@ export class GameShell {
     s.querySelector('.seat-sub')!.textContent = v.sub ?? '';
     s.querySelector('.seat-score')!.textContent = v.score === undefined ? '' : String(v.score);
     s.dataset.online = v.online === undefined || v.online === null ? '' : v.online ? 'yes' : 'no';
-    s.querySelector('.seat-disc')!.setAttribute('data-side', String(i));
+    const av = s.querySelector('.seat-disc')!;
+    av.setAttribute('data-side', String(i));
+    const glyph = v.avatar || initials(v.name);
+    if (av.textContent !== glyph) av.textContent = glyph;
+    av.classList.toggle('emoji', Boolean(v.avatar));
     s.classList.toggle('patterned', settings.get().patterns);
   }
 
@@ -101,6 +108,7 @@ export class GameShell {
       ...(color ? [h('span', { class: 'status-disc', style: `--disc:${color}` })] : []),
       h('span', { class: 'status-text' }, text),
     );
+    this.statusEl.append(this.clock.el);
     this.statusEl.dataset.tone = tone;
     this.statusEl.classList.toggle('has-disc', Boolean(color));
   }

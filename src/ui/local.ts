@@ -7,11 +7,13 @@ import { nav, type Screen } from './router';
 import { GameShell, actionButton } from './shell';
 import { bumpAiRecord, colorHex, colorName, sanitizeName, settings, storage, type ColorId } from './store';
 import { promptDialog } from './dialog';
+import { allowanceFor, fmtClock, MAX_STRIKES, SUDDEN_DEATH_MS, randomLegalColumn, type TimerSpec } from './timer';
 
 export interface Seat {
   name: string;
   color: ColorId;
   kind: 'human' | 'ai';
+  avatar?: string;
 }
 
 export interface LocalGameState {
@@ -23,6 +25,14 @@ export interface LocalGameState {
   score: [number, number];
   draws: number;
   level?: Level;
+  /** Timed matches (2 Players). */
+  timer?: TimerSpec | null;
+  bank?: [number, number];
+  strikes?: [number, number];
+  /** Seat that lost on time, if any. */
+  forfeit?: 0 | 1 | null;
+  /** Time left on the current turn when the app was hidden/closed (so reloading can't refill it). */
+  turnLeft?: number | null;
 }
 
 const RESUME_KEY = 'resume';
@@ -51,6 +61,18 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
   const aiSeat = st.seats.findIndex((s) => s.kind === 'ai');
   const isAI = st.mode === 'ai';
 
+  const timer = st.timer ?? null;
+  if (timer) {
+    st.bank ??= [timer.ms, timer.ms];
+    st.strikes ??= [0, 0];
+  }
+  let clockSeat = -1;
+  let deadline = 0;
+  let turnTotal = 0;
+  let pausedLeft: number | null = null;
+  let clockInterval = 0;
+  let lastSeatRender = 0;
+
   const seatOf = (side: Side) => (side === 0 ? st.firstSeat : ((1 - st.firstSeat) as 0 | 1));
   const colorOf = (side: Side) => colorHex(st.seats[seatOf(side)].color);
 
@@ -66,7 +88,7 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
     renderSeats();
   });
 
-  const undoBtn = actionButton('Undo', 'undo', () => undo(), { id: 'undo' });
+  const undoBtn = timer ? null : actionButton('Undo', 'undo', () => undo(), { id: 'undo' });
   const hintBtn = isAI ? actionButton('Hint', 'bulb', () => void showHint(), { id: 'hint' }) : null;
   const mood = h('p', { class: 'mood', 'aria-live': 'polite' });
   shell.setActions([undoBtn, hintBtn]);
@@ -77,12 +99,95 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
       shell.setSeat(i, {
         name: s.name,
         color: colorHex(s.color),
+        avatar: s.avatar ?? '',
         score: st.score[i],
-        sub: s.kind === 'ai' ? LEVEL_INFO[st.level!].label : isAI ? (i === st.firstSeat ? 'Moves first' : '') : i === st.firstSeat ? 'Moves first' : '',
+        sub: s.kind === 'ai' ? LEVEL_INFO[st.level!].label : timer ? timerSub(i) : i === st.firstSeat ? 'Moves first' : '',
       }),
     );
     shell.setDraws(st.draws);
   }
+
+  function timerSub(i: number): string {
+    if (!timer) return '';
+    const parts: string[] = [];
+    if (timer.kind === 'bank') {
+      const left = i === clockSeat ? Math.max(0, pausedLeft ?? deadline - performance.now()) : st.bank![i];
+      parts.push(st.bank![i] > 0 ? `⏱ ${fmtClock(Math.min(left, st.bank![i] || left))}` : `⏱ ${SUDDEN_DEATH_MS / 1000}s/move`);
+    }
+    if (timer.onTimeout === 'auto' && st.strikes![i]) parts.push(`${st.strikes![i]}/${MAX_STRIKES} timeouts`);
+    return parts.join(' · ') || (i === st.firstSeat ? 'Moves first' : '');
+  }
+
+  /* ---------- clock ---------- */
+  function startClock(seatIdx: number) {
+    if (!timer || finished) return;
+    const full = allowanceFor(timer, st.bank![seatIdx]);
+    const allow = st.turnLeft != null ? Math.min(full, Math.max(1000, st.turnLeft)) : full;
+    st.turnLeft = null;
+    clockSeat = seatIdx;
+    turnTotal = full;
+    deadline = performance.now() + allow;
+    pausedLeft = document.hidden ? allow : null;
+    clearInterval(clockInterval);
+    clockInterval = window.setInterval(tickClock, 200);
+    tickClock();
+  }
+  function stopClock() {
+    if (!timer || clockSeat < 0) return;
+    clearInterval(clockInterval);
+    const left = pausedLeft ?? deadline - performance.now();
+    if (timer.kind === 'bank' && st.bank![clockSeat] > 0) st.bank![clockSeat] = Math.max(0, Math.round(left));
+    clockSeat = -1;
+    shell.clock.set(null);
+  }
+  function tickClock() {
+    if (clockSeat < 0) return;
+    const left = pausedLeft ?? deadline - performance.now();
+    const sec = shell.clock.set(Math.max(0, left), turnTotal);
+    if (sec > 0 && sec <= 3) {
+      sfx.tick();
+      buzz(15);
+    }
+    if (timer!.kind === 'bank' && performance.now() - lastSeatRender > 250) {
+      lastSeatRender = performance.now();
+      renderSeats();
+    }
+    if (left <= 0) onTimeout();
+  }
+  function onTimeout() {
+    const seat = clockSeat as 0 | 1;
+    stopClock();
+    if (timer!.kind === 'bank') st.bank![seat] = 0;
+    const name = st.seats[seat].name;
+    if (timer!.onTimeout === 'lose') {
+      st.forfeit = seat;
+      return finish();
+    }
+    st.strikes![seat]++;
+    if (st.strikes![seat] >= MAX_STRIKES) {
+      st.forfeit = seat;
+      return finish();
+    }
+    sfx.invalid();
+    buzz([40, 30, 40]);
+    toast(`Time's up! Random move for ${name} (${st.strikes![seat]}/${MAX_STRIKES})`);
+    announce(`Time's up for ${name}. A random disc was dropped.`);
+    void doMove(randomLegalColumn(st.moves), true);
+  }
+  const onVisibility = () => {
+    if (clockSeat < 0) return;
+    if (document.hidden && pausedLeft === null) {
+      pausedLeft = deadline - performance.now();
+      st.turnLeft = pausedLeft;
+      save();
+      st.turnLeft = null;
+    }
+    else if (!document.hidden && pausedLeft !== null) {
+      deadline = performance.now() + pausedLeft;
+      pausedLeft = null;
+    }
+  };
+  document.addEventListener('visibilitychange', onVisibility);
 
   function save() {
     storage.set(RESUME_KEY, st);
@@ -97,7 +202,7 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
   }
 
   function refreshButtons() {
-    (undoBtn as HTMLButtonElement).disabled = !humanCanUndo() || (busy && !isAI);
+    if (undoBtn) (undoBtn as HTMLButtonElement).disabled = !humanCanUndo() || (busy && !isAI);
     if (hintBtn) {
       const humanTurn = !finished && st.seats[seatOf((st.moves.length & 1) as Side)].kind === 'human';
       (hintBtn as HTMLButtonElement).disabled = busy || !humanTurn || replaying;
@@ -106,7 +211,7 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
 
   function next() {
     const { result } = analyze(st.moves);
-    if (result.over) return finish();
+    if (result.over || st.forfeit != null) return finish();
     const side = (st.moves.length & 1) as Side;
     const seatIdx = seatOf(side);
     const seat = st.seats[seatIdx];
@@ -121,6 +226,7 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
       shell.setStatus(isAI ? 'Your turn' : `${seat.name}'s turn`, 'normal', colorHex(seat.color));
       if (!coached) shell.coach('Tap a column to drop your disc');
       busy = false;
+      startClock(seatIdx);
       refreshButtons();
     }
   }
@@ -166,7 +272,8 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
     void doMove(c);
   }
 
-  async function doMove(c: number) {
+  async function doMove(c: number, auto = false) {
+    if (!auto) stopClock();
     busy = true;
     const side = (st.moves.length & 1) as Side;
     shell.board.setInteractive(false, side);
@@ -198,6 +305,7 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
   function finish() {
     finished = true;
     busy = false;
+    stopClock();
     const { result } = analyze(st.moves);
     shell.board.setInteractive(false);
     shell.setActive(null);
@@ -206,7 +314,17 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
     let title: string;
     let sub = '';
     let color: string | undefined;
-    if (result.winner === null) {
+    if (st.forfeit != null) {
+      const winIdx = (1 - st.forfeit) as 0 | 1;
+      st.score[winIdx]++;
+      const winner = st.seats[winIdx];
+      color = colorHex(winner.color);
+      title = `${winner.name} wins on time`;
+      sub = timer?.onTimeout === 'auto' ? `${st.seats[st.forfeit].name} ran out of time ${MAX_STRIKES} times.` : `${st.seats[st.forfeit].name} ran out of time.`;
+      sfx.win();
+      buzz([30, 40, 60]);
+      confetti([color, '#ffffff']);
+    } else if (result.winner === null) {
       st.draws++;
       title = "It's a draw";
       sub = 'Board full — nobody connected four.';
@@ -251,6 +369,11 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
     finished = false;
     st.firstSeat = (1 - st.firstSeat) as 0 | 1;
     st.moves = [];
+    if (timer) {
+      st.bank = [timer.ms, timer.ms];
+      st.strikes = [0, 0];
+    }
+    st.forfeit = null;
     mood.textContent = '';
     shell.hideResult();
     shell.board.setPosition([]);
@@ -284,8 +407,8 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
   function showFinishedCardOnly() {
     finished = true;
     const { result } = analyze(st.moves);
-    const seat = result.winner === null ? null : st.seats[seatOf(result.winner)];
-    const title = !seat ? "It's a draw" : isAI ? (seat.kind === 'human' ? 'You win!' : 'Computer wins') : `${seat.name} wins!`;
+    const seat = st.forfeit != null ? st.seats[1 - st.forfeit] : result.winner === null ? null : st.seats[seatOf(result.winner)];
+    const title = !seat ? "It's a draw" : st.forfeit != null ? `${seat.name} wins on time` : isAI ? (seat.kind === 'human' ? 'You win!' : 'Computer wins') : `${seat.name} wins!`;
     shell.setStatus(title, 'muted');
     shell.showResult(title, '', [
       { label: 'Play again', primary: true, onClick: rematch },
@@ -348,7 +471,9 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
         settings.set(i === 0 ? { name1: st.seats[i].name } : { name2: st.seats[i].name });
         renderSeats();
         save();
-        if (!finished) next();
+        // Re-render the banner; with a timer running, don't restart the clock.
+        if (!finished && clockSeat < 0 && !animating && !busy) next();
+        else if (!finished) shell.setStatus(`${st.seats[clockSeat].name}'s turn`, 'normal', colorHex(st.seats[clockSeat].color));
       }),
     );
 
@@ -362,6 +487,8 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
     el: shell.el,
     destroy() {
       token++;
+      clearInterval(clockInterval);
+      document.removeEventListener('visibilitychange', onVisibility);
       replaying = false;
       ai.cancel();
       unsub();

@@ -1,4 +1,5 @@
 import type { Level } from '../ai/search';
+import type { TimerSpec } from './timer';
 
 /** localStorage access that never throws (private mode, blocked storage, etc.). */
 export const storage = {
@@ -72,6 +73,10 @@ export interface Settings {
   aiLevel: Level;
   aiFirst: 'me' | 'ai' | 'random';
   hasSeenHelp: boolean;
+  timer2p: TimerSpec | null;
+  avatar1: string;
+  avatar2: string;
+  timerOnline: TimerSpec | null;
 }
 
 const DEFAULTS: Settings = {
@@ -88,6 +93,10 @@ const DEFAULTS: Settings = {
   aiLevel: 'easy',
   aiFirst: 'me',
   hasSeenHelp: false,
+  timer2p: null,
+  avatar1: '',
+  avatar2: '',
+  timerOnline: null,
 };
 
 type Listener = (s: Settings) => void;
@@ -131,6 +140,14 @@ export function bumpAiRecord(level: Level, key: keyof Record3) {
   const r = aiRecord();
   r[level][key]++;
   storage.set('aiRecord', r);
+}
+
+/** Built-in avatars: emoji cost nothing to download. '' = initials. */
+export const AVATARS = ['', '🦊', '🐼', '🐯', '🦁', '🐸', '🐨', '🐵', '🦉', '🐙', '🦄', '🐧', '🚀', '⚡', '🎯', '👾'];
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const s = parts.length > 1 ? parts[0][0] + parts[1][0] : (parts[0] ?? '?').slice(0, 2);
+  return s.toUpperCase();
 }
 
 export function sanitizeName(s: string, fallback: string) {

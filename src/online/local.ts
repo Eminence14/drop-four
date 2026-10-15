@@ -42,6 +42,8 @@ export function createLocalTransport(): Transport {
   return {
     kind: 'local',
     uid: me,
+    serverNow: () => Date.now(),
+    ts: () => Date.now(),
     async create(code, data) {
       if (read(code)) return false;
       localStorage.setItem(K(code), JSON.stringify(data));

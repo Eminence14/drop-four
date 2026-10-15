@@ -26,3 +26,8 @@
 | 22 | **Plain-language labels** | "vs Computer" / "2 Players" / "Play a friend online" read more clearly to first-timers than "AI" / "Pass & Play". |
 | 23 | **Turn banner + floating next disc + one-time coach mark** | Answers the two questions new players have: whose turn is it, and what do I tap? |
 | 24 | **Database region us-central1** | The default location was kept when the database was created. For a turn-based game the extra round trip is barely noticeable. |
+| 25 | **Timer modes: 2 Players + Online, not vs Computer** | A clock matters when someone is waiting on you. vs Computer is for learning and practice; a timer there adds stress without fairness value and would add a step to the one-tap level picker. |
+| 26 | **Online clock = server-stamped `turnAt` + allowance** | Each move writes `turnAt` as Firebase's own server timestamp (rules require `=== now`), so no client can fake when a turn started. Deadline = turnAt + per-move time (or remaining bank). Rules only accept a timeout move/strike/forfeit after that deadline has really passed, for the player whose turn it is. |
+| 27 | **Clock starts when the player to move is looking** | The first turn's clock (and each new game's) starts when that player's screen shows the board, so nobody loses time while still in the share sheet. |
+| 28 | **Known limit: auto-move column** | On an "auto" timeout the claiming client picks a random column; rules can't prove randomness, so a tampered client could pick a bad column for a timed-out opponent. It still costs that opponent a strike either way. |
+| 29 | **Avatars are emoji** | Zero bytes to download and crisp at any size; initials are the default so nothing needs choosing. |

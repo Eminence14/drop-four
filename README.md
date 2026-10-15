@@ -6,7 +6,7 @@ A fast, installable four-in-a-row game (PWA).
 - **vs AI:** five levels (Beginner → Advanced). The AI runs on the device in a Web Worker, so it works offline.
 - **Play Online:** two phones, anywhere. Create a room, then share a 4-character code, a QR code or a link.
 
-Also included: undo, hints, replay, a running score, rematches that alternate who goes first, resume after closing the app, emoji reactions online, light/dark themes, colour-blind-friendly disc symbols, sound, vibration and keyboard play.
+Also included: timed matches (per-move or total clock), avatars, undo, hints, replay, a running score, rematches that alternate who goes first, resume after closing the app, emoji reactions online, light/dark themes, colour-blind-friendly disc symbols, sound, vibration and keyboard play.
 
 **Stack:** Vite + TypeScript (no UI framework), `vite-plugin-pwa`, Firebase Realtime Database (free Spark plan) for online rooms, hosted on Netlify. No server code: all online integrity comes from `database.rules.json`.
 

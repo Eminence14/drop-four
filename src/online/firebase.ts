@@ -38,10 +38,14 @@ export async function createFirebaseTransport(): Promise<Transport> {
   goOnline(db);
   const uid = cred.user.uid;
   const roomRef = (code: string) => ref(db, `rooms/${code}`);
+  let offset = 0;
+  const offOffset = onValue(ref(db, '.info/serverTimeOffset'), (s) => (offset = Number(s.val()) || 0));
 
   return {
     kind: 'firebase',
     uid,
+    serverNow: () => Date.now() + offset,
+    ts: () => serverTimestamp(),
     async create(code, data) {
       try {
         await set(roomRef(code), data);
@@ -111,6 +115,7 @@ export async function createFirebaseTransport(): Promise<Transport> {
       }
     },
     close() {
+      offOffset();
       goOffline(db);
     },
   };

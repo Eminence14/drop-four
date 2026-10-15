@@ -204,7 +204,7 @@ class Searcher {
       if (alpha >= beta) break;
     }
 
-    if (this.tt.size > 2_000_000) this.tt.clear();
+    if (this.tt.size > 400_000) this.tt.clear(); // keeps memory modest on low-end phones
     this.tt.set(key, {
       d: depth,
       s: best,

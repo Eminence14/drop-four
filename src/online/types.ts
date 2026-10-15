@@ -1,8 +1,11 @@
+import type { TimerSpec } from '../ui/timer';
+
 export type SeatId = 'p1' | 'p2';
 export interface RoomPlayer {
   uid: string;
   name: string;
   color: string;
+  avatar?: string;
 }
 export interface Reaction {
   e: string;
@@ -21,12 +24,25 @@ export interface RoomData {
   rematch?: Partial<Record<SeatId, boolean>> | null;
   reactions?: Partial<Record<SeatId, Reaction>> | null;
   left?: Partial<Record<SeatId, boolean>> | null;
+  /** Timed matches: fixed at room creation. */
+  timer?: TimerSpec | null;
+  /** Server time (ms) when the current turn's clock started (absent until the mover sees the board). */
+  turnAt?: number | null;
+  /** Bank mode: remaining ms per player. */
+  bank?: Record<SeatId, number> | null;
+  strikes?: Partial<Record<SeatId, number>> | null;
+  /** Seat that lost on time this game. */
+  forfeit?: SeatId | null;
 }
 
 /** Everything the online UI needs from a realtime backend. */
 export interface Transport {
   readonly kind: 'firebase' | 'local';
   uid: string;
+  /** Best estimate of the server's clock (ms since epoch). */
+  serverNow(): number;
+  /** Placeholder the backend replaces with its own clock when written. */
+  ts(): unknown;
   create(code: string, data: RoomData): Promise<boolean>;
   get(code: string): Promise<RoomData | null>;
   watch(code: string, cb: (room: RoomData | null) => void): () => void;

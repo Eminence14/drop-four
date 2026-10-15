@@ -33,6 +33,11 @@ class AIClient {
     });
   }
 
+  /** Starts the worker early so the first AI reply isn't delayed by worker start-up. */
+  warm() {
+    void this.w;
+  }
+
   move(moves: number[], level: Level) {
     return this.send({ kind: 'move', moves, level });
   }

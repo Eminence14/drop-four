@@ -2,13 +2,22 @@ import './styles.css';
 import { registerSW } from 'virtual:pwa-register';
 import { LEVEL_INFO, LEVELS, type Level } from './ai/search';
 import { normalizeCode } from './online/types';
+import { timerPicker, type TimerSpec } from './ui/timer';
 import { confirmDialog, sheet } from './ui/dialog';
 import { h, icon } from './ui/dom';
 import { toast } from './ui/fx';
 import { loadResume, localGameScreen, type LocalGameState } from './ui/local';
-import { lastRoom, onlineEntryScreen, rejoinLast } from './ui/online';
+
+/* Online UI (and its QR library) is code-split: offline players never download it. */
+const onlineUI = () => import('./ui/online');
+const lastRoom = () => storage.raw<{ code: string }>('online');
+const rejoinLast = () => onlineUI().then((m) => m.rejoinLast()).catch(() => toast('Could not load online play — check your connection.'));
+const goOnline = (code = '') =>
+  onlineUI()
+    .then((m) => nav.go(() => m.onlineEntryScreen(code)))
+    .catch(() => toast('Could not load online play — check your connection.'));
 import { nav, type Screen } from './ui/router';
-import { aiRecord, colorHex, PALETTE, sanitizeName, settings, storage, type ColorId, type Settings } from './ui/store';
+import { aiRecord, colorHex, PALETTE, sanitizeName, settings, storage, type ColorId, type Settings, AVATARS, initials } from './ui/store';
 
 /* ---------------- Theme ---------------- */
 function applyTheme() {
@@ -64,7 +73,10 @@ const updateSW = registerSW({
 });
 
 /* ---------------- Screens ---------------- */
-const openSettings = () => nav.go(settingsScreen);
+/** Settings open as a sheet on top of whatever is on screen, so a game in progress is never torn down. */
+const openSettings = () => {
+  const close = sheet('Settings', settingsBody(() => close()));
+};
 
 /** Animated mini board on the home screen: shows what the game is in one glance. */
 function heroBoard(): HTMLElement {
@@ -99,21 +111,36 @@ function heroBoard(): HTMLElement {
   return grid;
 }
 
-function startPvp() {
+function startPvp(timer: TimerSpec | null) {
   const s = settings.get();
   const c2 = s.color2 === s.color1 ? (PALETTE.find((p) => p.id !== s.color1)!.id as ColorId) : s.color2;
+  settings.set({ timer2p: timer });
   const st: LocalGameState = {
     mode: 'pvp',
     seats: [
-      { name: s.name1 || 'Player 1', color: s.color1, kind: 'human' },
-      { name: s.name2 || 'Player 2', color: c2, kind: 'human' },
+      { name: s.name1 || 'Player 1', color: s.color1, kind: 'human', avatar: s.avatar1 },
+      { name: s.name2 || 'Player 2', color: c2, kind: 'human', avatar: s.avatar2 },
     ],
     firstSeat: 0,
     moves: [],
     score: [0, 0],
     draws: 0,
+    timer,
   };
   nav.go(() => localGameScreen(st, openSettings));
+}
+
+/** 2 Players: one sheet with the (optional) timer, then Start. */
+function openPvpSheet() {
+  const picker = timerPicker(settings.get().timer2p);
+  let close = () => {};
+  const startBtn = h('button', { class: 'btn primary big', 'data-id': 'start', onclick: () => { const t = picker.get(); close(); startPvp(t); } }, 'Start game');
+  close = sheet('2 Players', h('div', { class: 'sheet-body' },
+    h('p', { class: 'muted center' }, 'Take turns on this phone. Add a timer for a faster, tenser game.'),
+    picker.el,
+    startBtn,
+  ));
+  requestAnimationFrame(() => startBtn.focus());
 }
 
 function startAI(level: Level) {
@@ -124,8 +151,8 @@ function startAI(level: Level) {
     mode: 'ai',
     level,
     seats: [
-      { name: 'You', color: s.color1, kind: 'human' },
-      { name: 'Computer', color: aiColor, kind: 'ai' },
+      { name: 'You', color: s.color1, kind: 'human', avatar: s.avatar1 },
+      { name: 'Computer', color: aiColor, kind: 'ai', avatar: '🤖' },
     ],
     firstSeat: 0,
     moves: [],
@@ -137,6 +164,7 @@ function startAI(level: Level) {
 
 /** One tap: pick a level and the game starts. */
 function openAiSheet() {
+  void import('./ai/client').then((m) => m.ai.warm());
   const rec = aiRecord();
   const current = settings.get().aiLevel;
   let close = () => {};
@@ -191,8 +219,8 @@ function homeScreen(): Screen {
         : null,
     h('nav', { class: 'modes', 'aria-label': 'Choose how to play' },
       modeBtn({ id: 'ai', title: 'vs Computer', sub: 'Play alone · 5 levels', ic: pair(colorHex(s.color1), '#8b93b8'), onClick: openAiSheet }),
-      modeBtn({ id: 'pvp', title: '2 Players', sub: 'Take turns on this phone', ic: pair(colorHex(s.color1), colorHex(s.color2)), onClick: startPvp }),
-      modeBtn({ id: 'online', title: 'Play a friend online', sub: offline ? 'Needs internet' : 'They join with a code', ic: icon('globe'), onClick: () => nav.go(() => onlineEntryScreen()) }),
+      modeBtn({ id: 'pvp', title: '2 Players', sub: 'Take turns on this phone', ic: pair(colorHex(s.color1), colorHex(s.color2)), onClick: openPvpSheet }),
+      modeBtn({ id: 'online', title: 'Play a friend online', sub: offline ? 'Needs internet' : 'They join with a code', ic: icon('globe'), onClick: () => void goOnline() }),
     ),
     h('div', { class: 'home-foot' },
       h('button', { class: 'link-btn', onclick: () => nav.go(helpScreen) }, 'How to play'),
@@ -224,8 +252,8 @@ function colorPicker(name: string, value: ColorId, disabled: ColorId | null, onP
   return { el: wrap, render };
 }
 
-function settingsScreen(): Screen {
-  const body = h('div', { class: 'form' });
+function settingsBody(onDone: () => void): HTMLElement {
+  const body = h('div', { class: 'form settings-body' });
   const seg = <T extends string>(label: string, options: [T, string][], get: () => T, set: (v: T) => void) => {
     const g = h('div', { class: 'seg', role: 'radiogroup', 'aria-label': label });
     const render = () =>
@@ -256,9 +284,25 @@ function settingsScreen(): Screen {
       onchange: () => settings.set({ [key]: sanitizeName(i.value, label) } as Partial<Settings>) }) as HTMLInputElement;
     return i;
   };
+  const avatarPicker = (key: 'avatar1' | 'avatar2', nameKey: 'name1' | 'name2', colorKey: 'color1' | 'color2') => {
+    const wrap = h('div', { class: 'avatars', role: 'radiogroup', 'aria-label': 'Avatar' });
+    const render = () =>
+      wrap.replaceChildren(
+        ...AVATARS.map((a) =>
+          h('button', {
+            type: 'button', role: 'radio', class: 'avatar-opt' + (a ? ' emoji' : ''),
+            'aria-checked': String(s()[key] === a), 'aria-label': a || 'Initials',
+            style: `--disc:${colorHex(s()[colorKey])}`,
+            onclick: () => { settings.set({ [key]: a } as Partial<Settings>); render(); },
+          }, a || initials(s()[nameKey] || 'P')),
+        ),
+      );
+    render();
+    return wrap;
+  };
   body.append(
-    h('div', { class: 'setting' }, h('span', { class: 'label' }, 'Player 1 (also you vs Computer)'), nameInput('name1', 'Player 1'), pick1.el),
-    h('div', { class: 'setting' }, h('span', { class: 'label' }, 'Player 2 (and the Computer)'), nameInput('name2', 'Player 2'), pick2.el),
+    h('div', { class: 'setting' }, h('span', { class: 'label' }, 'Player 1 (you, vs Computer and online)'), nameInput('name1', 'Player 1'), avatarPicker('avatar1', 'name1', 'color1'), pick1.el),
+    h('div', { class: 'setting' }, h('span', { class: 'label' }, 'Player 2'), nameInput('name2', 'Player 2'), avatarPicker('avatar2', 'name2', 'color2'), pick2.el),
     seg('Theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], () => s().theme, (v) => settings.set({ theme: v })),
     seg('Animation', [['normal', 'Normal'], ['fast', 'Fast'], ['reduced', 'Reduced']], () => s().animation, (v) => settings.set({ animation: v })),
     toggle('Sound', () => s().sound, (v) => settings.set({ sound: v })),
@@ -276,16 +320,8 @@ function settingsScreen(): Screen {
     ),
     h('p', { class: 'muted small center' }, `Drop Four v${__APP_VERSION__}`),
   );
-  return {
-    el: h('section', { class: 'screen form-screen' },
-      h('header', { class: 'topbar' },
-        h('button', { class: 'icon-btn', 'aria-label': 'Back', onclick: () => nav.back() }, icon('back')),
-        h('h1', { class: 'topbar-title', tabindex: '-1' }, 'Settings'),
-        h('span', { class: 'icon-btn-spacer' }),
-      ),
-      body,
-    ),
-  };
+  body.append(h('button', { class: 'btn primary big', onclick: onDone }, 'Done'));
+  return body;
 }
 
 function miniBoard(cells: string): HTMLElement {
@@ -344,7 +380,7 @@ const deep = location.pathname.match(/^\/r\/([A-Za-z0-9]{4})\/?$/)?.[1] ?? new U
 if (deep && normalizeCode(deep).length === 4) {
   const code = normalizeCode(deep);
   history.replaceState({ df: 0 }, '', '/' + location.search.replace(/([?&])room=[^&]*&?/, '$1').replace(/[?&]$/, ''));
-  nav.go(() => onlineEntryScreen(code));
+  void goOnline(code);
 }
 
 if (!deep && new URLSearchParams(location.search).get('mode') === 'ai') openAiSheet();

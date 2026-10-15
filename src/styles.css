@@ -1310,3 +1310,47 @@ h2 {
   background: var(--accent); color: var(--accent-text); font-size: .85rem;
 }
 .lobby .btn.big { margin-bottom: 8px; }
+
+/* join row: the code box gets the room, the button sits beside it */
+.join-row .code-input {
+  flex: 1 1 auto; min-width: 0; width: 100%; height: 56px;
+  font-size: 1.5rem; letter-spacing: 0.4em; text-indent: 0.4em; padding: 0 8px;
+  color: var(--text); text-transform: uppercase; font-variant-numeric: tabular-nums;
+}
+.join-row .code-input::placeholder { color: var(--muted); opacity: .5; letter-spacing: 0.4em; }
+.join-row .join-btn { flex: 0 0 auto; min-width: 96px; height: 56px; }
+
+/* avatars (emoji or initials on the player's colour) */
+.seat-disc {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  color: #fff; font-weight: 900; font-size: .8rem; letter-spacing: .02em;
+  text-shadow: 0 1px 1px rgba(0,0,0,.25); line-height: 1; overflow: visible;
+}
+.seat-disc.emoji { font-size: 1.15rem; text-shadow: none; }
+[data-patterns] .seat-disc::after { content: none; }
+.avatars { display: flex; flex-wrap: wrap; gap: 8px; }
+.avatar-opt {
+  width: 40px; height: 40px; border-radius: 50%; border: 3px solid transparent;
+  background: var(--disc); color: #fff; font-weight: 900; font-size: .85rem; display: grid; place-items: center;
+}
+.avatar-opt.emoji { font-size: 1.3rem; background: color-mix(in srgb, var(--disc) 28%, var(--surface)); }
+.avatar-opt[aria-checked='true'] { border-color: var(--text); }
+@media (max-width: 380px) { .seat-disc { width: 28px; height: 28px; } }
+
+/* timer */
+.timer-picker { display: flex; flex-direction: column; gap: 10px; }
+.tp-row { display: flex; flex-direction: column; gap: 6px; }
+.tp-row .label { margin: 0; }
+.tp-help { margin: 0; }
+.timer-details summary { cursor: pointer; font-weight: 700; color: var(--accent); min-height: 32px; display: flex; align-items: center; }
+.timer-details[open] summary { margin-bottom: 8px; }
+.clock { position: relative; width: 42px; height: 42px; margin-left: 4px; flex: none; display: grid; place-items: center; }
+.clock svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.clock circle { fill: none; stroke-width: 3.5; }
+.clock-track { stroke: var(--line); }
+.clock-fill { stroke: var(--good); stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
+.clock b { font-size: .72rem; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.clock.urgent .clock-fill { stroke: var(--bad); }
+.clock.urgent b { color: var(--bad); }
+.clock.urgent { animation: think .5s ease-in-out infinite; }
+.settings-body { padding-bottom: 8px; }

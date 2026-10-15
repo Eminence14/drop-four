@@ -8,6 +8,7 @@ const drop = async (p: Page, c: number) => {
 test('pass & play: vertical win, undo, rematch', async ({ page }) => {
   await page.goto('/');
   await page.click('[data-id=pvp]');
+  await page.click('[data-id=start]');
   for (const c of [0, 1, 0, 1, 0, 1]) await drop(page, c);
   await page.click('[data-id=undo]');
   await expect(page.locator('.discs .disc')).toHaveCount(5);
@@ -82,4 +83,62 @@ test('online (same-browser transport): create, join, play, rematch, reload', asy
   await b.reload();
   await b.waitForSelector('.game');
   await expect(b.locator('.discs .disc')).toHaveCount(1, { timeout: 5000 });
+});
+
+test('2 players: 5s per move timer auto-moves, 3 timeouts lose', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/');
+  await page.click('[data-id=pvp]');
+  await page.click('.timer-picker [role=radio]:has-text("Per move")');
+  await page.click('.timer-picker [role=radio]:has-text("5s")');
+  await page.click('[data-id=start]');
+  await expect(page.locator('.clock')).toBeVisible();
+  await expect(page.locator('[data-id=undo]')).toHaveCount(0);
+  // Let Player 1 time out three times while Player 2 plays instantly.
+  // Timeouts 1 and 2 drop a random disc; timeout 3 ends the game.
+  for (let i = 0; i < 2; i++) {
+    await expect(page.locator('.discs .disc')).toHaveCount(i * 2 + 1, { timeout: 8000 });
+    {
+      await expect(page.locator('.status')).toContainText("Player 2's turn");
+      await page.waitForTimeout(700); // let the auto-dropped disc land
+      await page.locator('.col').nth(6).click();
+    }
+  }
+  await expect(page.locator('.result-title')).toContainText('wins on time', { timeout: 8000 });
+});
+
+test('2 players: lose on timeout', async ({ page }) => {
+  await page.goto('/');
+  await page.click('[data-id=pvp]');
+  await page.click('.timer-picker [role=radio]:has-text("Per move")');
+  await page.click('.timer-picker [role=radio]:has-text("5s")');
+  await page.click('.timer-picker [role=radio]:has-text("Lose")');
+  await page.click('[data-id=start]');
+  await expect(page.locator('.result-title')).toContainText('Player 2 wins on time', { timeout: 9000 });
+});
+
+test('online (same-browser transport): timed room, lose on timeout', async ({ context }) => {
+  test.setTimeout(60_000);
+  const a = await context.newPage();
+  const b = await context.newPage();
+  await a.goto('/?transport=local');
+  await a.click('[data-id=online]');
+  await a.fill('#online-name', 'Ann');
+  await a.click('.timer-details summary');
+  await a.click('.timer-picker [role=radio]:has-text("Per move")');
+  await a.click('.timer-picker [role=radio]:has-text("5s")');
+  await a.click('.timer-picker [role=radio]:has-text("Lose")');
+  await a.click('text=Create game');
+  const code = (await a.locator('.room-code').innerText()).replace(/\s/g, '');
+  await b.goto(`/r/${code}?transport=local`);
+  await b.waitForSelector('.game');
+  let done = false;
+  for (let k = 0; k < 30 && !done; k++) {
+    for (const p of [a, b]) {
+      await p.bringToFront();
+      await p.waitForTimeout(250);
+      if ((await p.locator('.result-title').count()) && (await p.locator('.result-title').innerText()).includes('on time')) done = true;
+    }
+  }
+  expect(done).toBe(true);
 });
