@@ -83,7 +83,17 @@ export class GameShell {
     s.style.setProperty('--disc', v.color);
     s.querySelector('.seat-name')!.textContent = v.name;
     s.querySelector('.seat-sub')!.textContent = v.sub ?? '';
-    s.querySelector('.seat-score')!.textContent = v.score === undefined ? '' : String(v.score);
+    const scoreEl = s.querySelector('.seat-score') as HTMLElement;
+    const score = v.score === undefined ? '' : String(v.score);
+    if (scoreEl.textContent !== score) {
+      const had = scoreEl.textContent !== '' && score !== '';
+      scoreEl.textContent = score;
+      if (had) {
+        scoreEl.classList.remove('bump');
+        void scoreEl.offsetWidth;
+        scoreEl.classList.add('bump');
+      }
+    }
     s.dataset.online = v.online === undefined || v.online === null ? '' : v.online ? 'yes' : 'no';
     const av = s.querySelector('.seat-disc')!;
     av.setAttribute('data-side', String(i));

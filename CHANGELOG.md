@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.0 — 2026-10-18
+- Real drop physics: discs fall under gravity, squash on impact and bounce once or twice in the slot.
+  Higher drops land harder: bigger squash, a deeper board thud, stronger haptics and a softer second click on the bounce.
+- New game: the board's "lever" releases and every disc clatters out through the bottom.
+- Undo lifts the disc back up and out of its column. The next-disc preview glides between columns on a spring.
+- Wins: a line draws itself through the winning four while those discs pop in sequence. The other discs fade back more cleanly.
+- Screen transitions: forward slides in from the right, back from the left, and the home board morphs into the game board
+  (on browsers with View Transitions; others get a gentle slide).
+- Springs everywhere: buttons and cards give under your finger; sheets rise with a little overshoot and can be dragged
+  down (or flicked) to dismiss; dialogs, the result card and toasts spring in; scores pop when they change; home cards rise in sequence.
+- Frosted glass across the whole app (cards, player chips, buttons, inputs, toasts, chat) over a slowly drifting ambient light.
+- Fixed: a focus outline showed around the board after tapping; it now appears only for keyboard users.
+- All motion respects Reduce motion (system setting or Settings → Animation).
+
 ## 1.4.0 — 2026-10-18
 - New palettes drawn from the UI Inspo board.
   - Light "Bone & Slate": warm bone paper, slate-teal board, ink-black buttons and soft neumorphic depth

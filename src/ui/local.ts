@@ -294,7 +294,7 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
     animating = false;
     st.moves.push(c);
     sfx.drop(depth);
-    buzz(12);
+    buzz(8 + depth * 2);
     announce(`${st.seats[seatOf(side)].name} drops in column ${c + 1}.`);
     save();
     busy = false;

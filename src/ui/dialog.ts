@@ -76,14 +76,14 @@ export function sheet(title: string, body: HTMLElement): () => void {
     prev?.focus?.();
   };
   const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
-  const wrap = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
-    h('div', { class: 'modal-backdrop', onclick: () => close() }),
-    h('div', { class: 'sheet-card' },
-      h('div', { class: 'sheet-grab', 'aria-hidden': 'true' }),
-      h('h2', { class: 'sheet-title' }, title),
-      body,
-    ),
+  const handle = h('div', { class: 'sheet-handle' },
+    h('div', { class: 'sheet-grab', 'aria-hidden': 'true' }),
+    h('h2', { class: 'sheet-title' }, title),
   );
+  const card = h('div', { class: 'sheet-card' }, handle, body);
+  const backdrop = h('div', { class: 'modal-backdrop', onclick: () => close() });
+  const wrap = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, backdrop, card);
+  dragToDismiss(handle, card, backdrop, () => close());
   document.body.append(wrap);
   document.addEventListener('keydown', onKey);
   requestAnimationFrame(() => {
@@ -91,4 +91,47 @@ export function sheet(title: string, body: HTMLElement): () => void {
     (body.querySelector('button') as HTMLElement | null)?.focus({ preventScroll: true });
   });
   return close;
+}
+
+/**
+ * Pull a sheet down by its handle. Releases past a third of its height, or with a
+ * downward flick, dismiss it; anything less springs back.
+ */
+function dragToDismiss(handle: HTMLElement, card: HTMLElement, backdrop: HTMLElement, close: () => void) {
+  let startY = 0;
+  let dy = 0;
+  let samples: { y: number; t: number }[] = [];
+  let dragging = false;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    dragging = true;
+    startY = e.clientY;
+    dy = 0;
+    samples = [{ y: e.clientY, t: e.timeStamp }];
+    handle.setPointerCapture(e.pointerId);
+    card.classList.add('dragging');
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const raw = e.clientY - startY;
+    // Rubber-band when pulled upwards.
+    dy = raw > 0 ? raw : -Math.sqrt(-raw) * 3;
+    card.style.transform = `translateY(${dy}px)`;
+    backdrop.style.opacity = String(Math.max(0.2, 1 - Math.max(0, dy) / (card.offsetHeight || 1)));
+    samples.push({ y: e.clientY, t: e.timeStamp });
+    if (samples.length > 6) samples.shift();
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    card.classList.remove('dragging');
+    const a = samples[0];
+    const b = samples[samples.length - 1];
+    const v = b && a && b.t > a.t ? (b.y - a.y) / (b.t - a.t) : 0; // px/ms
+    backdrop.style.opacity = '';
+    card.style.transform = '';
+    if (dy > card.offsetHeight / 3 || v > 0.55) close();
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
 }

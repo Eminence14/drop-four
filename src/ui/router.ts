@@ -12,14 +12,51 @@ let current: Screen | null = null;
 let root: HTMLElement;
 let suppressPop = false;
 
-function mount(f: ScreenFactory) {
+type Dir = 'forward' | 'back' | 'fade';
+
+const reduced = () =>
+  document.documentElement.dataset.anim === 'reduced' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+function swap(f: ScreenFactory) {
   current?.destroy?.();
   current = f();
   root.replaceChildren(current.el);
-  current.el.classList.add('enter');
   window.scrollTo(0, 0);
   const focusTarget = current.el.querySelector<HTMLElement>('[autofocus], h1, .board-wrap');
   focusTarget?.focus?.({ preventScroll: true });
+}
+
+/**
+ * Swaps screens with a directional slide. Uses the View Transitions API where
+ * available (so the home board can morph into the game board), and a light
+ * slide-in fallback elsewhere.
+ */
+function mount(f: ScreenFactory, dir: Dir = 'fade') {
+  const first = !current;
+  if (first || reduced() || document.hidden) return swap(f);
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
+  const html = document.documentElement;
+  if (doc.startViewTransition) {
+    html.dataset.nav = dir;
+    try {
+      const vt = doc.startViewTransition(() => swap(f));
+      vt.finished.finally(() => {
+        if (html.dataset.nav === dir) delete html.dataset.nav;
+      });
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
+  swap(f);
+  const x = dir === 'forward' ? 36 : dir === 'back' ? -36 : 0;
+  current!.el.animate(
+    [
+      { opacity: 0, transform: `translateX(${x}px) scale(${dir === 'fade' ? 0.98 : 1})` },
+      { opacity: 1, transform: 'none' },
+    ],
+    { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' },
+  );
 }
 
 export const nav = {
@@ -41,14 +78,14 @@ export const nav = {
         return;
       }
       if (stack.length > 1) stack.pop();
-      mount(stack[stack.length - 1]);
+      mount(stack[stack.length - 1], 'back');
     });
   },
   /** Navigate forward to a new screen. */
   go(f: ScreenFactory) {
     stack.push(f);
     history.pushState({ df: stack.length - 1 }, '');
-    mount(f);
+    mount(f, 'forward');
   },
   /** Replace current screen without adding history. */
   replace(f: ScreenFactory) {
@@ -61,10 +98,10 @@ export const nav = {
   /** Back to home, collapsing history. */
   home() {
     const n = stack.length - 1;
-    if (n <= 0) return mount(stack[0]);
+    if (n <= 0) return mount(stack[0], 'back');
     stack.length = 1;
     suppressPop = true;
     history.go(-n);
-    mount(stack[0]);
+    mount(stack[0], 'back');
   },
 };

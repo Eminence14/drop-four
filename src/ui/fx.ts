@@ -35,6 +35,14 @@ export const sfx = {
     tone(260 - depth * 12, 0.12, { type: 'triangle', slide: 90, gain: 0.28 });
     tone(1400, 0.03, { type: 'square', gain: 0.03 });
   },
+  /** Soft second click when a disc bounces in its slot. */
+  bounce(fall = 3) {
+    tone(320 - fall * 10, 0.05, { type: 'triangle', slide: 160, gain: 0.05 + fall * 0.01 });
+  },
+  /** Discs clattering out of the board when a new game starts. */
+  drain() {
+    for (let i = 0; i < 6; i++) tone(180 + Math.random() * 140, 0.05, { type: 'triangle', gain: 0.06, delay: 0.05 + i * 0.045 + Math.random() * 0.03 });
+  },
   win() {
     [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, { type: 'triangle', gain: 0.18, delay: i * 0.09 }));
   },

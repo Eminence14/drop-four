@@ -386,6 +386,9 @@ if (deep && normalizeCode(deep).length === 4) {
 if (!deep && new URLSearchParams(location.search).get('mode') === 'ai') openAiSheet();
 // Reopened/reloaded during an online game (never explicitly left): go straight back in.
 else if (!deep && lastRoom() && navigator.onLine) void rejoinLast();
+// Focus rings only for keyboard users (the board takes focus programmatically).
+addEventListener('keydown', (e: KeyboardEvent) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) document.documentElement.dataset.kbd = '1'; }, true);
+addEventListener('pointerdown', () => { delete document.documentElement.dataset.kbd; }, true);
 
 addEventListener('online', () => document.querySelectorAll('.net').forEach((n) => ((n as HTMLElement).textContent = '')));
 addEventListener('offline', () => toast("You're offline — Pass & Play and AI still work"));
