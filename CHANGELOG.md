@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0 — 2026-10-18
+- New palettes drawn from the UI Inspo board.
+  - Light "Bone & Slate": warm bone paper, slate-teal board, ink-black buttons and soft neumorphic depth
+    (raised cards, pressed-in inputs and toggles).
+  - Dark "Ink & Copper": blue-black ink surfaces, midnight slate board and a copper-to-gold accent on the main buttons.
+- New disc colour: Caramel.
+- Frosted cards and sheets now take their tint from the theme tokens.
+
 ## 1.3.0 — 2026-10-18
 - New graphite dark theme (dark grey, not pure black) with one lime accent, glowing discs and outlined cards.
 - Material-style shapes everywhere: pill buttons, 24–28px rounded cards; result cards, sheets and dialogs are frosted glass.

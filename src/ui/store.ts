@@ -54,6 +54,7 @@ export const PALETTE = [
   { id: 'mint', name: 'Mint', hex: '#1FC79A' },
   { id: 'violet', name: 'Violet', hex: '#9D6BFF' },
   { id: 'pink', name: 'Pink', hex: '#FF5FA2' },
+  { id: 'caramel', name: 'Caramel', hex: '#D9A066' },
 ] as const;
 export type ColorId = (typeof PALETTE)[number]['id'];
 export const colorHex = (id: string) => PALETTE.find((p) => p.id === id)?.hex ?? '#888';

@@ -20,7 +20,7 @@ export default defineConfig({
         scope: '/',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#f5f1e8',
+        background_color: '#ebe6dd',
         theme_color: '#2b3a8f',
         categories: ['games'],
         icons: [

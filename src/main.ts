@@ -28,7 +28,7 @@ function applyTheme() {
   root.toggleAttribute('data-patterns', s.patterns);
   root.dataset.anim = s.animation;
   const dark = s.theme === 'dark' || (s.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#111214' : '#f5f1e8');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0e1115' : '#ebe6dd');
 }
 settings.subscribe(applyTheme);
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
