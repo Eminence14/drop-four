@@ -39,10 +39,14 @@ function mount(f: ScreenFactory, dir: Dir = 'fade') {
   if (doc.startViewTransition) {
     html.dataset.nav = dir;
     try {
-      const vt = doc.startViewTransition(() => swap(f));
-      vt.finished.finally(() => {
-        if (html.dataset.nav === dir) delete html.dataset.nav;
-      });
+      const vt = doc.startViewTransition(() => swap(f)) as { finished: Promise<void>; ready?: Promise<void> };
+      // A skipped transition (rapid taps, hidden tab) rejects these; the swap still happened.
+      vt.ready?.catch(() => undefined);
+      vt.finished
+        .catch(() => undefined)
+        .finally(() => {
+          if (html.dataset.nav === dir) delete html.dataset.nav;
+        });
       return;
     } catch {
       /* fall through */
