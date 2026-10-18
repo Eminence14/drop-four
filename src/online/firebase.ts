@@ -6,16 +6,12 @@ import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import {
   child,
-  endAt,
   get,
   getDatabase,
   goOffline,
   goOnline,
-  limitToFirst,
   onDisconnect,
   onValue,
-  orderByChild,
-  query,
   ref,
   remove,
   runTransaction,
@@ -101,18 +97,20 @@ export async function createFirebaseTransport(): Promise<Transport> {
     connected(cb) {
       return onValue(ref(db, '.info/connected'), (s) => cb(s.val() === true));
     },
-    async cleanup() {
-      try {
-        const q = query(ref(db, 'rooms'), orderByChild('expiresAt'), endAt(Date.now()), limitToFirst(5));
-        const snap = await get(q);
-        const jobs: Promise<void>[] = [];
-        snap.forEach((c) => {
-          jobs.push(remove(c.ref).catch(() => undefined));
-        });
-        await Promise.all(jobs);
-      } catch {
-        /* best effort */
-      }
+    async cleanup(codes) {
+      // Rooms are private, so there is no global listing: each device tidies
+      // up the expired rooms it took part in.
+      await Promise.all(
+        codes.map(async (code) => {
+          try {
+            const snap = await get(ref(db, `rooms/${code}`));
+            const exp = snap.child('expiresAt').val() as number | null;
+            if (snap.exists() && typeof exp === 'number' && exp < Date.now() - 60_000) await remove(snap.ref);
+          } catch {
+            /* best effort */
+          }
+        }),
+      );
     },
     close() {
       offOffset();

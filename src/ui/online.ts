@@ -8,11 +8,17 @@ import { announce, buzz, confetti, sfx, toast } from './fx';
 import { nav, type Screen } from './router';
 import { GameShell } from './shell';
 import { colorHex, PALETTE, sanitizeName, settings, storage } from './store';
+import { RoomChat } from './chat';
 import { allowanceFor, describeTimer, fmtClock, MAX_STRIKES, randomLegalColumn, SUDDEN_DEATH_MS, timerPicker } from './timer';
 
 const SESSION_KEY = 'online';
 export const lastRoom = () => storage.raw<{ code: string }>(SESSION_KEY);
-const rememberRoom = (code: string) => storage.set(SESSION_KEY, { code });
+const HISTORY_KEY = 'onlineHistory';
+const roomHistory = () => storage.raw<string[]>(HISTORY_KEY) ?? [];
+const rememberRoom = (code: string) => {
+  storage.set(SESSION_KEY, { code });
+  storage.set(HISTORY_KEY, [code, ...roomHistory().filter((c) => c !== code)].slice(0, 8));
+};
 const forgetRoom = () => storage.remove(SESSION_KEY);
 
 const other = (s: SeatId): SeatId => (s === 'p1' ? 'p2' : 'p1');
@@ -107,7 +113,7 @@ export function onlineEntryScreen(prefill = ''): Screen {
     setWorking(true, 'Creating room…');
     try {
       const t = await transport();
-      void t.cleanup();
+      void t.cleanup(roomHistory());
       const now = Date.now();
       let code = '';
       for (let i = 0; i < 6 && !code; i++) {
@@ -198,7 +204,14 @@ export function onlineEntryScreen(prefill = ''): Screen {
 
 /** Joins (or rejoins) a room. Returns an error message, or null on success. */
 async function joinRoom(t: Transport, code: string, name: string): Promise<string | null> {
-  const room = await t.get(code);
+  let room: RoomData | null;
+  try {
+    room = await t.get(code);
+  } catch (e) {
+    // Rooms are private to their two players once full.
+    if (/permission/i.test(String((e as Error)?.message ?? e))) return 'That room is already full.';
+    throw e;
+  }
   if (!room) return `No room found with code ${code}. Check the code and try again.`;
   if (room.expiresAt < Date.now()) return 'That room has expired. Ask your friend to create a new one.';
   if (room.players.p1.uid === t.uid) {
@@ -275,6 +288,13 @@ function roomScreen(t: Transport, code: string): Screen {
   let rematchBtn: HTMLButtonElement | null = null;
   let claiming = false;
   let startingClock = false;
+  const chat = new RoomChat({
+    me: () => me,
+    nameOf: (s) => room?.players[s]?.name ?? 'Opponent',
+    send: (id, msg) => t.update(code, { [`chat/${id}`]: { ...msg, at: t.ts() } }),
+    react: (e) => void t.update(code, { [`reactions/${me}`]: { e, at: Date.now() } }).catch(() => undefined),
+    seatEl: (s) => shell?.el.querySelector(`.seat[data-seat="${s === 'p1' ? 0 : 1}"]`) ?? null,
+  });
   let clockInterval = 0;
   let prevStrikes: Partial<Record<SeatId, number>> = {};
 
@@ -431,12 +451,7 @@ function roomScreen(t: Transport, code: string): Screen {
       },
       board: { color: (s) => colorOfSide(s), onColumn: (c) => void myMove(c) },
     });
-    const reactions = h('div', { class: 'reactions', role: 'group', 'aria-label': 'Send a reaction' },
-      ...['👍', '😮', '😂', '🔥'].map((e) =>
-        h('button', { class: 'react-btn', 'aria-label': `Send ${e}`, onclick: () => void t.update(code, { [`reactions/${me}`]: { e, at: Date.now() } }).catch(() => undefined) }, e),
-      ),
-    );
-    shell.setActions([reactions]);
+    shell.setActions([chat.button]);
     if (room!.timer) shell.setExtra(h('p', { class: 'mood' }, `⏱ ${describeTimer(room!.timer)}`));
     root.replaceChildren(shell.el);
     prevStrikes = { ...(room!.strikes ?? {}) };
@@ -754,6 +769,7 @@ function roomScreen(t: Transport, code: string): Screen {
       updateRematchUI();
     }
     showReactions();
+    chat.update(r.chat);
     if (r.timer) {
       (['p1', 'p2'] as SeatId[]).forEach((s) => {
         const n = r.strikes?.[s] ?? 0;

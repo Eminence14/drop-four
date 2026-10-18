@@ -1,10 +1,6 @@
 {
   "rules": {
     "rooms": {
-      ".read": "auth != null",
-      ".indexOn": [
-        "expiresAt"
-      ],
       "$code": {
         ".write": "auth != null && ((!data.exists() && newData.child('players/p1/uid').val() === auth.uid) || (data.exists() && !newData.exists() && data.child('expiresAt').val() < now))",
         ".validate": "$code.matches(/^[A-HJKMNP-Z2-9]{4}$/) && newData.hasChildren(['createdAt', 'expiresAt', 'status', 'players', 'firstPlayer', 'gameNumber', 'score'])",
@@ -156,7 +152,26 @@
         "turnAt": {
           ".write": "(auth != null && (root.child('rooms/' + $code + '/players/p1/uid').val() === auth.uid || root.child('rooms/' + $code + '/players/p2/uid').val() === auth.uid)) && (newData.exists() || newData.parent().child('gameNumber').val() === data.parent().child('gameNumber').val() + 1)",
           ".validate": "newData.isNumber() && newData.val() === now && newData.parent().child('timer').exists() && (!data.exists() || newData.parent().child('moves').val() !== data.parent().child('moves').val() || newData.parent().child('gameNumber').val() === data.parent().child('gameNumber').val() + 1)"
-        }
+        },
+        "chat": {
+          "$id": {
+            ".write": "auth != null && !data.exists() && newData.exists() && (newData.child('by').val() === 'p1' || newData.child('by').val() === 'p2') && root.child('rooms/' + $code + '/players/' + newData.child('by').val() + '/uid').val() === auth.uid",
+            ".validate": "$id.length <= 20 && newData.hasChildren(['by', 't', 'at'])",
+            "by": {
+              ".validate": "newData.isString()"
+            },
+            "t": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 120"
+            },
+            "at": {
+              ".validate": "newData.val() === now"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        ".read": "auth != null && (!data.child('players/p2').exists() || data.child('players/p1/uid').val() === auth.uid || data.child('players/p2/uid').val() === auth.uid)"
       }
     },
     "presence": {

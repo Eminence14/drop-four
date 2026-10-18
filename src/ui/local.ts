@@ -57,7 +57,6 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
   let coached = Boolean(storage.raw<boolean>('coached'));
   let token = 0; // invalidates async AI work after undo / leave
   let finished = false;
-  let replaying = false;
   const aiSeat = st.seats.findIndex((s) => s.kind === 'ai');
   const isAI = st.mode === 'ai';
 
@@ -194,7 +193,7 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
   }
 
   function humanCanUndo() {
-    if (finished || replaying || animating || !st.moves.length) return false;
+    if (finished || animating || !st.moves.length) return false;
     if (!isAI) return true;
     // Must have at least one human move on the board.
     const humanSide: Side = st.firstSeat === aiSeat ? 1 : 0;
@@ -205,7 +204,7 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
     if (undoBtn) (undoBtn as HTMLButtonElement).disabled = !humanCanUndo() || (busy && !isAI);
     if (hintBtn) {
       const humanTurn = !finished && st.seats[seatOf((st.moves.length & 1) as Side)].kind === 'human';
-      (hintBtn as HTMLButtonElement).disabled = busy || !humanTurn || replaying;
+      (hintBtn as HTMLButtonElement).disabled = busy || !humanTurn;
     }
   }
 
@@ -261,7 +260,7 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
   }
 
   function onColumn(c: number) {
-    if (busy || finished || replaying) return;
+    if (busy || finished) return;
     const { board } = analyze(st.moves);
     if (!board.canPlay(c)) {
       sfx.invalid();
@@ -359,7 +358,6 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
     renderSeats();
     shell.showResult(title, sub, [
       { label: 'Play again', primary: true, onClick: rematch },
-      { label: 'Replay', icon: 'replay', onClick: () => void replay() },
       { label: 'Home', onClick: () => nav.home() },
     ], color);
   }
@@ -382,39 +380,6 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
     toast(isAI ? (first.kind === 'ai' ? 'Computer goes first this time' : 'You go first this time') : `${first.name} goes first`);
     save();
     next();
-  }
-
-  async function replay() {
-    replaying = true;
-    shell.hideResult();
-    refreshButtons();
-    const moves = st.moves.slice();
-    shell.board.setPosition([]);
-    shell.setStatus('Replaying…', 'muted');
-    for (const m of moves) {
-      if (!replaying) return;
-      await shell.board.drop(m);
-      sfx.tick();
-      await sleep(260);
-    }
-    replaying = false;
-    const { result } = analyze(moves);
-    if (result.lines.length) shell.board.highlight(result.lines);
-    finished = false; // finish() will set it again without double counting
-    showFinishedCardOnly();
-  }
-
-  function showFinishedCardOnly() {
-    finished = true;
-    const { result } = analyze(st.moves);
-    const seat = st.forfeit != null ? st.seats[1 - st.forfeit] : result.winner === null ? null : st.seats[seatOf(result.winner)];
-    const title = !seat ? "It's a draw" : st.forfeit != null ? `${seat.name} wins on time` : isAI ? (seat.kind === 'human' ? 'You win!' : 'Computer wins') : `${seat.name} wins!`;
-    shell.setStatus(title, 'muted');
-    shell.showResult(title, '', [
-      { label: 'Play again', primary: true, onClick: rematch },
-      { label: 'Replay', icon: 'replay', onClick: () => void replay() },
-      { label: 'Home', onClick: () => nav.home() },
-    ], seat ? colorHex(seat.color) : undefined);
   }
 
   function undo() {
@@ -489,7 +454,6 @@ export function localGameScreen(initial: LocalGameState, openSettings: () => voi
       token++;
       clearInterval(clockInterval);
       document.removeEventListener('visibilitychange', onVisibility);
-      replaying = false;
       ai.cancel();
       unsub();
     },

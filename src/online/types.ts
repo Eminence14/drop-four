@@ -33,6 +33,8 @@ export interface RoomData {
   strikes?: Partial<Record<SeatId, number>> | null;
   /** Seat that lost on time this game. */
   forfeit?: SeatId | null;
+  /** In-room chat; removed with the room. */
+  chat?: Record<string, { by: SeatId; t: string; at: number }> | null;
 }
 
 /** Everything the online UI needs from a realtime backend. */
@@ -55,7 +57,8 @@ export interface Transport {
   /** Reports connectivity to the backend. */
   connected(cb: (online: boolean) => void): () => void;
   /** Deletes a few expired rooms (best effort). */
-  cleanup(): Promise<void>;
+  /** Delete any of these rooms that have expired (best effort). */
+  cleanup(codes: string[]): Promise<void>;
   close(): void;
 }
 

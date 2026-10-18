@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0 — 2026-10-18
+- New graphite dark theme (dark grey, not pure black) with one lime accent, glowing discs and outlined cards.
+- Material-style shapes everywhere: pill buttons, 24–28px rounded cards; result cards, sheets and dialogs are frosted glass.
+- Online chat behind one Chat button: one-tap quick phrases (Oh shit, Omo, Wow, Nice one, Sharpp, GG), emoji reactions,
+  and a short message log with free text. Messages pop up over the sender's player card and vanish with the room.
+- Privacy: once a room has two players only they can read it (including chat), and nobody can list rooms.
+  Old rooms are tidied up by the devices that played in them.
+- Includes the 1.2.1 Replay removal.
+
+## 1.2.1 — 2026-10-17
+- Removed the Replay button from the end-of-game card (it was easy to tap by mistake instead of Play again).
+
 ## 1.2.0 — 2026-10-15
 - Timed matches (2 Players and Online): per-move clock (5/10/20/30 s) or total time bank (1/3/5 min, then 5 s per move).
   On timeout: random move with 3 strikes = loss, or lose immediately. Online clocks run on Firebase server time and
